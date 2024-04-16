@@ -14,7 +14,9 @@ from luto.tools.report.map_tools.helper import (get_map_meta,
 
 
 
-def TIF2MAP(raw_data_dir:str):
+def TIF2MAP(data: Data, raw_data_dir=None):
+    if not raw_data_dir:
+        raw_data_dir = data.path
 
     # Get all LUTO output files and store them in a dataframe
     files = get_all_files(raw_data_dir)

@@ -59,49 +59,51 @@ from luto.tools.report.create_static_maps import TIF2MAP
 
 timestamp_write = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
 
-def write_outputs(data: Data):
     # Write the model outputs to file
+def write_outputs(data: Data):
     write_data(data)
     # Move the log files to the output directory
     write_logs(data)
     
 
 @tools.LogToFile(f"{settings.OUTPUT_DIR}/write_{timestamp_write}")
-def write_data(data: Data):
+def write_data(data, path=None):
 
     # Write model run settings
-    if not data.path:
+    if not path and not data.path:
         raise ValueError(
             "Cannot write outputs: 'path' attribute of Data object has not been set "
             "(has the simulation been run?)"
         )
-    write_settings(data.path)
+    elif not path:
+        path = data.path
+    write_settings(path)
 
     # Get the years to write
     years = sorted(list(data.lumaps.keys()))
-    paths = [f"{data.path}/out_{yr}" for yr in years]
+    paths = [f"{path}/out_{yr}" for yr in years]
 
     ###############################################################
     #                     Create raw outputs                      #
     ###############################################################
 
     # Write the area transition between base-year and target-year 
-    write_area_transition_start_end(data,f'{data.path}/out_{years[-1]}')
-    write_ghg_offland_commodity(data, f'{data.path}/out_{years[-1]}')
-
+    write_area_transition_start_end(data,f'{path}/out_{years[-1]}')
+    write_ghg_offland_commodity(data, f'{path}/out_{years[-1]}')
+    
     # Write outputs for each year
     jobs = [delayed(write_output_single_year)(data, yr, path_yr, None) for (yr, path_yr) in zip(years, paths)]
 
     # Write the area/quantity comparison between base-year and target-year for the timeseries mode
     begin_end_path = f"{data.path}/begin_end_compare_{years[0]}_{years[-1]}"
     if settings.MODE == 'timeseries':
-        # Write the target-year outputs to the path_begin_end_compare
-        jobs += [
-            delayed(write_output_single_year)(
-                data, years[-1], f"{begin_end_path}/out_{years[-1]}", years[0]
-            )
-        ]
-
+        begin_end_path = f"{path}/begin_end_compare_{years[0]}_{years[-1]}"
+        
+        # 1) Simply copy the base-year outputs to the path_begin_end_compare
+        shutil.copytree(f"{path}/out_{years[0]}", f"{begin_end_path}/out_{years[0]}", dirs_exist_ok = True)
+        # 2) Write the target-year outputs to the path_begin_end_compare
+        jobs = jobs + [delayed(write_output_single_year)(data, years[-1], f"{begin_end_path}/out_{years[-1]}", years[0])]
+    
     # Parallel write the outputs for each year
     num_jobs = min(len(jobs), settings.WRITE_THREADS) if settings.PARALLEL_WRITE else 1   # Use the minimum between jobs_num and threads for parallel writing
     Parallel(n_jobs=num_jobs, prefer='threads')(jobs)
@@ -110,9 +112,9 @@ def write_data(data: Data):
     shutil.copytree(f"{data.path}/out_{years[0]}", f"{begin_end_path}/out_{years[0]}", dirs_exist_ok = True)
 
     # Create the report HTML and png maps
-    TIF2MAP(data.path) if settings.WRITE_OUTPUT_GEOTIFFS else None
-    save_report_data(data.path)
-    data2html(data.path)
+    TIF2MAP(data, path) if settings.WRITE_OUTPUT_GEOTIFFS else None
+    save_report_data(data, path)
+    data2html(data, path)
     
     
 

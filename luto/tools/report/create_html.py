@@ -14,8 +14,10 @@ from luto.tools.report.data_tools.helper_func import (add_data_2_html,
 #         setting up working variables             #
 ####################################################
 
-def data2html(raw_data_dir):
-    
+def data2html(data: Data, raw_data_dir=None):
+
+    if not raw_data_dir:
+        raw_data_dir = data.path
 
     # Set the save directory    
     report_dir = f'{raw_data_dir}/DATA_REPORT'

@@ -40,7 +40,7 @@ from luto.tools.report.data_tools.parameters import (COMMODITIES_OFF_LAND,
                                                      NON_AG_LANDUSE)
 
 # Get the output directory
-def save_report_data(raw_data_dir:str):
+def save_report_data(data: Data, raw_data_dir=None):
     """
     Saves the report data in the specified directory.
 
@@ -50,6 +50,9 @@ def save_report_data(raw_data_dir:str):
     Returns:
     None
     """
+
+    if not raw_data_dir:
+        raw_data_dir = data.path
     
     # Set the save directory    
     SAVE_DIR = f'{raw_data_dir}/DATA_REPORT/data'
