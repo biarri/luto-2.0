@@ -109,7 +109,7 @@ def write_data(data, path=None):
     Parallel(n_jobs=num_jobs, prefer='threads')(jobs)
     
     # Copy the base-year outputs to the path_begin_end_compare
-    shutil.copytree(f"{data.path}/out_{years[0]}", f"{begin_end_path}/out_{years[0]}", dirs_exist_ok = True)
+    shutil.copytree(f"{data.path}/out_{years[0]}", f"{begin_end_path}/out_{years[0]}", dirs_exist_ok = True) if settings.MODE == 'timeseries' else None
 
     # Create the report HTML and png maps
     TIF2MAP(data, path) if settings.WRITE_OUTPUT_GEOTIFFS else None

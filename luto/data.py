@@ -15,15 +15,17 @@
 # LUTO 2.0. If not, see <https://www.gnu.org/licenses/>.
 
 
-import os, time
-import rasterio
-from datetime import datetime
+import os
+import time
 import math
+
 from dataclasses import dataclass
-import pandas as pd
-import numpy as np
-from scipy.interpolate import interp1d
 from typing import Any
+
+import numpy as np
+import pandas as pd
+import rasterio
+from scipy.interpolate import interp1d
 
 from luto.ag_managements import AG_MANAGEMENTS_TO_LAND_USES
 from luto.settings import (
@@ -52,22 +54,16 @@ from luto.settings import (
     GHG_LIMITS_TYPE,
     GHG_LIMITS,
     GHG_LIMITS_FIELD,
-    RIPARIAN_PLANTINGS_BUFFER_WIDTH,
-    RIPARIAN_PLANTINGS_TORTUOSITY_FACTOR,
+    RIPARIAN_PLANTING_BUFFER_WIDTH,
+    RIPARIAN_PLANTING_TORTUOSITY_FACTOR,
     BIODIV_LIVESTOCK_IMPACT,
     LDS_BIODIVERSITY_VALUE,
     OFF_LAND_COMMODITIES,
     EGGS_AVG_WEIGHT,
     NON_AGRICULTURAL_LU_BASE_CODE,
+    SAVBURN_COST_HA_YR,
 )
 
-
-# Try-Except to make sure {rasterio} can be loaded under different environment
-try:
-    import rasterio
-except:
-    from osgeo import gdal
-    import rasterio
 
 
 def dict2matrix(d, fromlist, tolist):
@@ -318,10 +314,7 @@ class Data:
                     self.LU2PR_DICT[lu] = self.LU2PR_DICT[lu] + [PR]
 
         # A reverse dictionary for convenience.
-        self.PR2LU_DICT = {}
-        for key, val in self.LU2PR_DICT.items():
-            for pr in val:
-                self.PR2LU_DICT[pr] = key
+        self.PR2LU_DICT = {pr: key for key, val in self.LU2PR_DICT.items() for pr in val}
 
         self.LU2PR = dict2matrix(self.LU2PR_DICT, self.AGRICULTURAL_LANDUSES, self.PRODUCTS)
 
@@ -344,7 +337,7 @@ class Data:
         # Crops commodities and products are one-one. Livestock is more complicated.
         self.CM2PR_DICT = { key.lower(): [key.upper()] if key in self.CM_CROPS else []
                     for key in self.COMMODITIES }
-        for key, value in self.CM2PR_DICT.items():
+        for key, _ in self.CM2PR_DICT.items():
             if len(key.split())==1:
                 head = key.split()[0]
                 tail = 0
@@ -569,12 +562,12 @@ class Data:
 
         # Calculate the proportion of the area of each cell within stream buffer (convert REAL_AREA from ha to m2 and divide m2 by m2)
         self.RP_PROPORTION = (
-            (2 * RIPARIAN_PLANTINGS_BUFFER_WIDTH * self.STREAM_LENGTH) / (self.REAL_AREA * 10000)
+            (2 * RIPARIAN_PLANTING_BUFFER_WIDTH * self.STREAM_LENGTH) / (self.REAL_AREA * 10000)
         ).astype(np.float32)
 
         # Calculate the length of fencing required for each cell in per hectare terms for riparian plantings
         self.RP_FENCING_LENGTH = (
-            (2 * RIPARIAN_PLANTINGS_TORTUOSITY_FACTOR * self.STREAM_LENGTH) / self.REAL_AREA
+            (2 * RIPARIAN_PLANTING_TORTUOSITY_FACTOR * self.STREAM_LENGTH) / self.REAL_AREA
         ).astype(np.float32)
         print("Done.")
 
@@ -865,8 +858,8 @@ class Data:
         self.SAVBURN_SEQ_CO2_TCO2E_HA = savburn_df.SAV_SEQ_CO2_TCO2E_HA.to_numpy()    # Additional carbon sequestration - carbon dioxide
         self.SAVBURN_TOTAL_TCO2E_HA = savburn_df.AEA_TOTAL_TCO2E_HA.to_numpy()        # Total emissions abatement from EDS savanna burning
 
-        # Cost per hectare in dollars
-        self.SAVBURN_COST_HA = 2
+        # Cost per hectare in dollars from settings
+        self.SAVBURN_COST_HA = SAVBURN_COST_HA_YR
         print("Done.")
 
         ###############################################################
@@ -936,23 +929,23 @@ class Data:
         print("Adjusting data for resfactor...", end=" ", flush=True)
         self.NCELLS = self.MASK.sum()
         self.EXCLUDE = self.EXCLUDE[:, self.MASK, :]
-        self.AGEC_CROPS = self.AGEC_CROPS.iloc[self.MASK]  # MultiIndex Dataframe [4218733 rows x 342 columns]
-        self.AGEC_LVSTK = self.AGEC_LVSTK.iloc[self.MASK]  # MultiIndex Dataframe [4218733 rows x 39 columns]
-        self.AGGHG_CROPS = self.AGGHG_CROPS.iloc[self.MASK]  # MultiIndex Dataframe [4218733 rows x ? columns]
-        self.AGGHG_LVSTK = self.AGGHG_LVSTK.iloc[self.MASK]  # MultiIndex Dataframe [4218733 rows x ? columns]
-        self.REAL_AREA = self.REAL_AREA[self.MASK] * self.RESMULT  # Actual Float32
-        self.LUMAP = self.LUMAP[self.MASK]  # Int8
-        self.LMMAP = self.LMMAP[self.MASK]  # Int8
+        self.AGEC_CROPS = self.AGEC_CROPS.iloc[self.MASK]                       # MultiIndex Dataframe [4218733 rows x 342 columns]
+        self.AGEC_LVSTK = self.AGEC_LVSTK.iloc[self.MASK]                       # MultiIndex Dataframe [4218733 rows x 39 columns]
+        self.AGGHG_CROPS = self.AGGHG_CROPS.iloc[self.MASK]                     # MultiIndex Dataframe [4218733 rows x ? columns]
+        self.AGGHG_LVSTK = self.AGGHG_LVSTK.iloc[self.MASK]                     # MultiIndex Dataframe [4218733 rows x ? columns]
+        self.REAL_AREA = self.REAL_AREA[self.MASK] * self.RESMULT               # Actual Float32
+        self.LUMAP = self.LUMAP[self.MASK]                                      # Int8
+        self.LMMAP = self.LMMAP[self.MASK]                                      # Int8
         self.AMMAP_DICT = {
             am: array[self.MASK] for am, array in self.AMMAP_DICT.items()
-        }  # Dictionary containing Int8 arrays
-        self.AG_L_MRJ = lumap2ag_l_mrj(self.LUMAP, self.LMMAP)  # Boolean [2, 4218733, 28]
+        }                                                                       # Dictionary containing Int8 arrays
+        self.AG_L_MRJ = lumap2ag_l_mrj(self.LUMAP, self.LMMAP)                  # Boolean [2, 4218733, 28]
         self.NON_AG_L_RK = lumap2non_ag_l_mk(
             self.LUMAP, len(self.NON_AGRICULTURAL_LANDUSES)
-        )  # Int8
+        )                                                                       # Int8
         self.AG_MAN_L_MRJ_DICT = get_base_am_vars(
             self.NCELLS, self.NLMS, self.N_AG_LUS
-        )  # Dictionary containing Int8 arrays
+        )                                                                       # Dictionary containing Int8 arrays
         self.WREQ_IRR_RJ = self.WREQ_IRR_RJ[self.MASK]                          # Water requirements for irrigated landuses
         self.WREQ_DRY_RJ = self.WREQ_DRY_RJ[self.MASK]                          # Water requirements for dryland landuses
         self.WATER_LICENCE_PRICE = self.WATER_LICENCE_PRICE[self.MASK]          # Int16
