@@ -341,7 +341,7 @@ def get_limits(data: Data, target: int):
     # Limits is a dictionary with heterogeneous value sets.
     limits = {}
     
-    if settings.WATER_USE_LIMITS == 'on': limits['water'] = ag_water.get_wuse_limits(data)
+    if settings.WATER_USE_LIMITS == 'on': limits['water'] = ag_water.get_wuse_limits(data, target)
     if settings.GHG_EMISSIONS_LIMITS == 'on':  limits['ghg'] = ag_ghg.get_ghg_limits(data, target)
     
     # If biodiversity limits are not turned on, set the limit to 0.

@@ -19,13 +19,15 @@ Pure functions to calculate water use by lm, lu.
 """
 
 
-from typing import Dict
+from typing import Optional
 import numpy as np
+from collections import defaultdict
 
 import luto.settings as settings
 from luto.ag_managements import AG_MANAGEMENTS_TO_LAND_USES
 from luto.data import Data
 from luto.economics.agricultural.quantity import get_yield_pot, lvs_veg_types
+import luto.economics.non_agricultural.water as non_ag_water
 
 
 def get_wreq_matrices(data: Data, yr_idx):
@@ -222,7 +224,7 @@ def get_agtech_ei_effect_w_mrj(data, w_mrj, yr_idx):
     return new_w_mrj
 
 
-def get_agricultural_management_water_matrices(data: Data, w_mrj, yr_idx) -> Dict[str, np.ndarray]:
+def get_agricultural_management_water_matrices(data: Data, w_mrj, yr_idx) -> dict[str, np.ndarray]:
     asparagopsis_data = get_asparagopsis_effect_w_mrj(data, w_mrj, yr_idx) if settings.AG_MANAGEMENTS['Asparagopsis taxiformis'] else np.zeros((data.NLMS, data.NCELLS, data.N_AG_LUS))
     precision_agriculture_data = get_precision_agriculture_effect_w_mrj(data, w_mrj, yr_idx) if settings.AG_MANAGEMENTS['Precision Agriculture'] else np.zeros((data.NLMS, data.NCELLS, data.N_AG_LUS))
     eco_grazing_data = get_ecological_grazing_effect_w_mrj(data, w_mrj, yr_idx) if settings.AG_MANAGEMENTS['Ecological Grazing'] else np.zeros((data.NLMS, data.NCELLS, data.N_AG_LUS))
@@ -238,10 +240,69 @@ def get_agricultural_management_water_matrices(data: Data, w_mrj, yr_idx) -> Dic
     }
 
 
-def get_wuse_limits(data: Data):
+def calc_water_usage_by_region_in_year(
+    data: Data,
+    yr_cal: int,
+    ag_w_mrj: Optional[np.ndarray] = None,
+    non_ag_w_rk: Optional[np.ndarray] = None,
+    ag_man_w_mrj: Optional[dict[str, np.ndarray]] = None,
+) -> dict[int, float]:  # TODO: check return typing
+    if not settings.WATER_USE_LIMITS == 'on':
+        return
+
+    # Convert calendar year to year index.
+    yr_idx = yr_cal - data.YR_CAL_BASE
+
+    # Collect water requirements for agricultural and non-agricultural land uses
+    ag_w_mrj = ag_w_mrj or get_wreq_matrices(data, yr_idx)
+    non_ag_w_rk = non_ag_w_rk or non_ag_water.get_wreq_matrix(data, ag_w_mrj, data.lumaps[yr_cal])
+    ag_man_w_mrj = ag_man_w_mrj or get_agricultural_management_water_matrices(data, ag_w_mrj, yr_idx)
+
+    # Data for river regions or drainage divisions
+    if settings.WATER_REGION_DEF == 'Drainage Division':
+        region_limits = data.DRAINDIV_LIMITS
+        region_id = data.DRAINDIV_ID
+    elif settings.WATER_REGION_DEF == 'River Region':
+        region_limits = data.RIVREG_LIMITS
+        region_id = data.RIVREG_ID
+    else:
+        print('Incorrect option for WATER_REGION_DEF in settings')
+
+    if any(
+        [ yr_cal not in vars_array for vars_array in 
+          [data.ag_dvars, data.non_ag_dvars, data.ag_man_dvars] ]
+    ):
+        raise ValueError(
+            f"Cannot calculate water usage for year {yr_cal}: "
+            f"no solution data available (has the simulation been run?)"
+        )
+
+    am2j = {
+        am: [data.DESC2AGLU[lu] for lu in am_lus]
+        for am, am_lus in AG_MANAGEMENTS_TO_LAND_USES.items()
+    }
+
+    water_use_by_region = {}
+    for region in region_limits:
+        # Get indices of cells in region
+        ind = np.flatnonzero(region_id == region).astype(np.int32)
+        
+        ag_contr = (ag_w_mrj[:, ind, :] * data.ag_dvars[yr_cal][:, ind, :]).sum()
+        non_ag_contr = (non_ag_w_rk[ind, :] * data.non_ag_dvars[yr_cal][ind, :]).sum()
+        ag_man_contr = sum(
+            (ag_man_w_mrj[am][:, ind, j_idx] * data.ag_man_dvars[yr_cal][am][:, ind, j_idx]).sum()
+            for am, am_j_list in am2j.items()
+            for j_idx in range(len(am_j_list))
+        )
+        water_use_by_region[region] = ag_contr + non_ag_contr + ag_man_contr
+
+    return water_use_by_region
+
+
+def get_target_year_wuse_limits(data: Data) -> list[tuple[int, str, float, float, np.ndarray]]:
     """
-    Return water use limits for regions (River Regions or Drainage Divisions as specified in luto.settings.py).
-    Currently set such that water limits are set at 2010 agricultural water requirements.
+    Gets the sustainable water use limits to be set for the year 'settings.WATER_LIMITS_TARGET_YEAR'
+    and every subsequent year afterwards.
 
     Parameters:
     - data: The data object containing the necessary input data.
@@ -314,6 +375,56 @@ def get_wuse_limits(data: Data):
     return wuse_limits
 
 
+def get_wuse_limits(data: Data, yr_cal: int) -> list[tuple[int, str, float, float, np.ndarray]]:
+    """
+    Return water use limits by regions (River Regions or Drainage Divisions as specified in luto.settings.py)
+    for a given year.
+
+    Parameters:
+    - data: The data object containing the necessary input data.
+    - yr_cal: the year to get water usage limits for.
+
+    Returns:
+    - wuse_limits: A list of tuples containing the water use limits for each region
+      (region index, region name, water use limit, water all, indices of cells in the region).
+
+    Raises:
+    - None
+
+    """
+    base_year = data.YR_CAL_BASE
+    target_year = settings.WATER_LIMITS_TARGET_YEAR
+
+    if target_year <= base_year:
+        raise ValueError(
+            f"Setting WATER_LIMITS_TARGET_YEAR ({target_year}) must be strictly " 
+            f"greater than the simulation base year ({base_year})."
+        )
+
+    if data.WATER_LIMITS_BY_YEAR: 
+        return (
+            data.WATER_LIMITS_BY_YEAR[target_year] if yr_cal > target_year
+            else data.WATER_LIMITS_BY_YEAR[yr_cal]
+        )
+    
+    # Target year water limits and base year water limits, both split by region
+    target_limits = get_target_year_wuse_limits(data)
+    base_year_water_use_by_reg = calc_water_usage_by_region_in_year(data, data.YR_CAL_BASE)
+    
+    limits_by_region_year = defaultdict(dict)
+    
+    n_years_cal = target_year - base_year + 1
+    calc_years = np.linspace(base_year, target_year, n_years_cal).astype(int)
+    assert calc_years[1] == base_year + 1
+
+    for region, name, water_all, wreq_reg_target, ind in target_limits:
+        wreq_reg_base_yr = max(base_year_water_use_by_reg[region], wreq_reg_target)
+        yrs_targets = np.linspace(wreq_reg_base_yr, wreq_reg_target, n_years_cal)
+
+        for yr, limit in zip(calc_years, yrs_targets):
+            limits_by_region_year[yr][region] = (region, name, water_all, limit, ind)
+
+    return dict(limits_by_region_year)
 
 
  

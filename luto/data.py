@@ -763,6 +763,10 @@ class Data:
         # WATER_YIELD_NUNC_DR = wy_dr_file[list(wy_dr_file.keys())[0]][0]                   # This might go in the simulation module where year is specified to save loading into memory
         # WATER_YIELD_NUNC_SR = wy_sr_file[list(wy_sr_file.keys())[0]][0]
 
+        # Initialise container for water usage limits to avoid re-calculating the figures
+        # during timeseries solves.
+        self.WATER_LIMITS_BY_YEAR = {}
+
 
         ###############################################################
         # Carbon sequestration by trees data.
