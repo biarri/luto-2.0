@@ -554,7 +554,41 @@ class LutoSolver:
         """
         if settings.WATER_LIMITS != "on":
             return
-        min_var = lambda var, prev_var: var if prev_var.x > 1e-3 else prev_var.x
+        # min_var = lambda var, prev_var: var if (not prev_var or prev_var.x > 1e-3) else prev_var
+
+        def min_var(var, prev_var):
+            if isinstance(prev_var,np.ndarray) and isinstance(var,np.ndarray):
+                return gp.quicksum([min_var(v,prev_v) for v,prev_v in zip(var,prev_var)])
+
+            if not prev_var or prev_var.x > 1e-3:
+                return var
+            else:
+                return prev_var
+
+
+        def get_prev_ag_man_vars(prev_ag_man_vars, am, j_idx, ind):
+            if not isinstance(j_idx, int) or not isinstance(ind, int):
+                breakpoint()
+
+            if prev_ag_man_vars is not None:
+                return prev_ag_man_vars[am][j_idx, ind]
+            return 0
+
+        # get_prev_ag_man_vars = (
+        #     lambda prev_ag_man_vars, am, j_idx, ind: prev_ag_man_vars[am][j_idx, ind]
+        #     if prev_ag_man_vars is not None else 0
+        # )
+        get_prev_ag_vars = (
+            lambda prev_ag_vars, j, ind: prev_ag_vars[j,ind]
+            if prev_ag_vars is not None else 0
+        )
+        get_prev_non_ag_vars = (
+            lambda prev_non_ag_vars, k, ind: prev_non_ag_vars[k, ind]
+            if prev_non_ag_vars is not None else 0
+        )
+
+        # breakpoint()
+
 
         print(f'  ...water net yield constraints by {settings.WATER_REGION_DEF}...')
 
@@ -566,11 +600,17 @@ class LutoSolver:
             ag_contr = gp.quicksum(
                 gp.quicksum(
                     self._input_data.ag_w_mrj[0, ind, j] 
-                    * min_var(self.X_ag_dry_vars_jr[j, ind], self.prev_X_ag_dry_vars_jr[j, ind])
+                    * min_var(
+                        self.X_ag_dry_vars_jr[j, ind], 
+                        get_prev_ag_vars(self.prev_X_ag_dry_vars_jr, j, ind)
+                    )
                 )  # Dryland agriculture contribution
                 + gp.quicksum(
                     self._input_data.ag_w_mrj[1, ind, j] 
-                    * min_var(self.X_ag_irr_vars_jr[j, ind], self.prev_X_ag_irr_vars_jr[j, ind])
+                    * min_var(
+                        self.X_ag_irr_vars_jr[j, ind], 
+                        get_prev_ag_vars(self.prev_X_ag_irr_vars_jr, j, ind)
+                    )
                 )  # Irrigated agriculture contribution
                 for j in range(self._input_data.n_ag_lus)
             )
@@ -578,11 +618,17 @@ class LutoSolver:
             ag_man_contr = gp.quicksum(
                 gp.quicksum(
                     self._input_data.ag_man_w_mrj[am][0, ind, j_idx]
-                    * min_var(self.X_ag_man_dry_vars_jr[am][j_idx, ind], self.prev_X_ag_man_dry_vars_jr[am][j_idx, ind])
+                    * min_var(
+                        self.X_ag_man_dry_vars_jr[am][j_idx, ind], 
+                        get_prev_ag_man_vars(self.prev_X_ag_man_dry_vars_jr, am, j_idx, ind)
+                    )
                 )  # Dryland alt. ag. management contributions
                 + gp.quicksum(
                     self._input_data.ag_man_w_mrj[am][1, ind, j_idx]
-                    * min_var(self.X_ag_man_irr_vars_jr[am][j_idx, ind], self.prev_X_ag_man_irr_vars_jr[am][j_idx, ind])
+                    * min_var(
+                        self.X_ag_man_irr_vars_jr[am][j_idx, ind], 
+                        get_prev_ag_man_vars(self.prev_X_ag_man_irr_vars_jr, am, j_idx, ind)
+                    )
                 )  # Irrigated alt. ag. management contributions
                 for am, am_j_list in self._input_data.am2j.items()
                 for j_idx in range(len(am_j_list))
@@ -591,7 +637,10 @@ class LutoSolver:
             non_ag_contr = gp.quicksum(
                 gp.quicksum(
                     self._input_data.non_ag_w_rk[ind, k] 
-                    * min_var(self.X_non_ag_vars_kr[k, ind], self.prev_X_non_ag_vars_kr[k, ind])
+                    * min_var(
+                        self.X_non_ag_vars_kr[k, ind], 
+                        get_prev_non_ag_vars(self.prev_X_non_ag_vars_kr, k, ind)
+                    )
                 )  # Non-agricultural contribution
                 for k in range(self._input_data.n_non_ag_lus)
             )

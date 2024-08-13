@@ -544,10 +544,10 @@ def get_water_net_yield_limits(
     latest_target_year = max(settings.WATER_YIELD_TARGETS)
 
     if not data.WATER_LIMITS_BY_YEAR:
-        data.WATER_LIMITS_BY_YEAR = _get_standard_water_net_yield_limits(data)
+        _get_standard_water_net_yield_limits(data)
     limit_year = min(yr_cal, latest_target_year)
 
-    return data.WATER_LIMITS_BY_YEAR[limit_year][0]
+    return data.WATER_LIMITS_BY_YEAR[limit_year]
 
 
 """
