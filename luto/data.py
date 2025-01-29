@@ -114,10 +114,10 @@ class Data:
     Contains all data required for the LUTO model to run. Loads all data upon initialisation.
     """
 
-    def __init__(self, timestamp: str) -> None:
+    def __init__(self, timestamp: str, base_year: int) -> None:
         """
         Sets up output containers (lumaps, lmmaps, etc) and loads all LUTO data, adjusted
-        for resfactor.
+        for resfactor and base year.
         """
         # Path for write module - overwrite when provided with a base and target year
         self.path = None
@@ -143,7 +143,7 @@ class Data:
         print('')
         print('Beginning data initialisation...')
 
-        self.YR_CAL_BASE = 2010  # The base year, i.e. where year index yr_idx == 0.
+        self.YR_CAL_BASE = base_year  # The base year, i.e. where year index yr_idx == 0.
 
 
 
@@ -396,19 +396,19 @@ class Data:
 
         # Initial (2010) land-use map, mapped as lexicographic land-use class indices.
         self.LUMAP = self.get_array_resfactor_applied(self.LUMAP_NO_RESFACTOR)
-        self.add_lumap(self.YR_CAL_BASE, self.LUMAP)
+        self.add_lumap(2010, self.LUMAP)
 
         # Initial (2010) land management map.
         self.LMMAP_NO_RESFACTOR = pd.read_hdf(os.path.join(INPUT_DIR, "lmmap.h5")).to_numpy()
         self.LMMAP = self.get_array_resfactor_applied(self.LMMAP_NO_RESFACTOR)
-        self.add_lmmap(self.YR_CAL_BASE, self.LMMAP)
+        self.add_lmmap(2010, self.LMMAP)
 
         # Initial (2010) agricutural management maps - no cells are used for alternative agricultural management options.
         # Includes a separate AM map for each agricultural management option, because they can be stacked.
         self.AMMAP_DICT = {
             am: np.zeros(self.NCELLS).astype("int8") for am in AG_MANAGEMENTS_TO_LAND_USES
         }
-        self.add_ammaps(self.YR_CAL_BASE, self.AMMAP_DICT)
+        self.add_ammaps(2010, self.AMMAP_DICT)
 
         self.AG_L_MRJ = self.get_exact_resfactored_lumap_mrj() 
         self.add_ag_dvars(self.YR_CAL_BASE, self.AG_L_MRJ)
