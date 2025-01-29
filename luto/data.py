@@ -41,6 +41,35 @@ from luto.settings import INPUT_DIR, OUTPUT_DIR
 from luto.tools.spatializers import upsample_and_fill_nodata, upsample_array
 
 
+@dataclass
+class WaterNetYieldLimit:
+    """
+    A class to store the water net yield for a region.
+
+    Attributes:
+    - region_name (str): The name of the region.
+    - water_net_yield (float): The water net yield for the region.
+    - cell_indices (np.ndarray): The indices of the cells in the region.
+    """
+    region_name: str
+    water_net_yield: float
+    cell_indices: np.ndarray
+
+
+@dataclass
+class Limits:
+    """
+    Stores the following limits for the solve:
+    - Water net yield limits
+    - GHG limits
+    - Biodiversity limits
+    - Reforestation limits
+    """
+    biodiversity: int
+    reforestation: None # TODO: Implement
+    water: dict[int, WaterNetYieldLimit] = None
+    ghg: int = None
+
 
 def dict2matrix(d, fromlist, tolist):
     """Return 0-1 matrix mapping 'from-vectors' to 'to-vectors' using dict d."""

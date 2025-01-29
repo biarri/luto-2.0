@@ -1,5 +1,5 @@
-# Copyright 2022 Fjalar J. de Haan and Brett A. Bryan at Deakin University
 #
+# Copyright 2022 Fjalar J. de Haan and Brett A. Bryan at Deakin University
 # This file is part of LUTO 2.0.
 #
 # LUTO 2.0 is free software: you can redistribute it and/or modify it under the
@@ -28,7 +28,7 @@ from typing import Optional
 
 import luto.settings as settings
 from luto.ag_managements import AG_MANAGEMENTS_TO_LAND_USES
-from luto.data import Data
+from luto.data import Data, WaterNetYieldLimit
 from luto.economics.agricultural.quantity import get_yield_pot, lvs_veg_types
 import luto.economics.non_agricultural.water as non_ag_water
 
@@ -496,7 +496,7 @@ def calc_water_net_yield_BASE_YR(data: Data) -> np.ndarray:
 
 def get_water_net_yield_limit_values(
     data: Data,
-) -> dict[int, tuple[str, float, np.ndarray]]:
+) -> dict[int, WaterNetYieldLimit]:
     """
     Return water net yield limits for regions (River Regions or Drainage Divisions as specified in luto.settings.py).
 
@@ -504,12 +504,7 @@ def get_water_net_yield_limit_values(
     - data: The data object containing the necessary input data.
 
     Returns:
-    water_net_yield_limits: A dictionary of tuples containing the water use limits for each region\n
-      region index:(
-      - region name
-      - water yield limit
-      - indices of cells in the region
-      )
+    water_net_yield_limits: list[WaterNetYieldLimit]
 
     Raises:
     - None
@@ -536,7 +531,9 @@ def get_water_net_yield_limit_values(
         hist_yield = wny_region_hist[region]
         ind = np.flatnonzero(region_id == region).astype(np.int32)
         limit_hist_level = hist_yield * (1 - settings.WATER_STRESS * settings.AG_SHARE_OF_WATER_USE)   # Water yield limit calculated as a proportial of historical level based on planetary boundary theory
-        limits_by_region[region] = (name, limit_hist_level, ind)    
+        
+        region_limit = WaterNetYieldLimit(name, limit_hist_level, ind)
+        limits_by_region[region] = region_limit
 
     # Save the results in data to avoid recalculating
     data.WATER_YIELD_LIMITS = limits_by_region

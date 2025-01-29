@@ -8,7 +8,7 @@ from luto import settings
 from luto.economics import land_use_culling
 from luto.settings import AG_MANAGEMENTS
 from luto.ag_managements import AG_MANAGEMENTS_TO_LAND_USES
-from luto.data import Data
+from luto.data import Data, Limits
 
 import luto.economics.agricultural.cost as ag_cost
 import luto.economics.agricultural.ghg as ag_ghg
@@ -25,6 +25,7 @@ import luto.economics.non_agricultural.ghg as non_ag_ghg
 import luto.economics.non_agricultural.quantity as non_ag_quantity
 import luto.economics.non_agricultural.transitions as non_ag_transition
 import luto.economics.non_agricultural.revenue as non_ag_revenue
+import luto.economics.non_agricultural.reforestation as non_ag_reforestation
 
 
 @dataclass
@@ -493,22 +494,26 @@ def get_limits(
     - Water net yield limits
     - GHG limits
     - Biodiversity limits
+    - Reforestation limits
     """
     print('Getting environmental limits...', flush = True)
     # Limits is a dictionary with heterogeneous value sets.
-    limits = {}
 
-    limits['water'] = ag_water.get_water_net_yield_limit_values(data)
+    limits = Limits()
+
+    if settings.WATER_LIMITS == 'on':
+        limits.water = ag_water.get_water_net_yield_limit_values(data)
 
     if settings.GHG_EMISSIONS_LIMITS == 'on':
-        limits['ghg'] = ag_ghg.get_ghg_limits(data, yr_cal)
+        limits.ghg = ag_ghg.get_ghg_limits(data, yr_cal)
 
     # If biodiversity limits are not turned on, set the limit to 0.
-    limits['biodiversity'] = (
+    limits.biodiversity = (
         ag_biodiversity.get_biodiversity_limits(data, yr_cal)
         if settings.BIODIVERSITY_LIMITS == 'on'
         else 0
     )
+    limits.reforestation = non_ag_reforestation.get_reforestation_net_yield_limit_values(data)
 
     return limits
 
