@@ -292,15 +292,17 @@ def get_non_ag_t_rk(data: Data, base_year):
     return output.astype(np.float32)
 
 
-def get_ag_x_mrj(data: Data, base_year):
+def get_ag_x_mrj(data: Data, base_year: int, target_year: int) -> np.ndarray:
     print('Getting agricultural exclude matrices...', flush = True)
-    output = ag_transition.get_exclude_matrices(data, data.lumaps[base_year])
+    output = ag_transition.get_exclude_matrices(data, data.lumaps[base_year], target_year)
     return output
 
 
-def get_non_ag_x_rk(data: Data, ag_x_mrj, base_year):
+def get_non_ag_x_rk(data: Data, ag_x_mrj, base_year, target_year) -> np.ndarray:
     print('Getting non-agricultural exclude matrices...', flush = True)
-    output = non_ag_transition.get_exclude_matrices(data, ag_x_mrj, data.lumaps[base_year])
+    output = non_ag_transition.get_exclude_matrices(
+        data, ag_x_mrj, data.lumaps[base_year], base_year, target_year
+    )
     return output
 
 
@@ -564,7 +566,7 @@ def get_input_data(data: Data, base_year: int, target_year: int) -> SolverInputD
         non_ag_g_rk=get_non_ag_g_rk(data, ag_g_mrj, base_year),
         non_ag_w_rk=get_non_ag_w_rk(data, ag_w_mrj, base_year, target_year, data.WATER_YIELD_HIST_DR, data.WATER_YIELD_HIST_SR),  # Calculate non-ag water requirement matrices based on historical water yield layers
         non_ag_b_rk=get_non_ag_b_rk(data, ag_b_mrj, base_year),
-        non_ag_x_rk=get_non_ag_x_rk(data, ag_x_mrj, base_year),
+        non_ag_x_rk=get_non_ag_x_rk(data, ag_x_mrj, base_year, target_year),
         non_ag_q_crk=get_non_ag_q_crk(data, ag_q_mrp, base_year),
         non_ag_lb_rk=get_non_ag_lb_rk(data, base_year),
         

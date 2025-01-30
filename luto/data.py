@@ -1168,6 +1168,14 @@ class Data:
         self.BIODIV_RAW_WEIGHTED_LDS = self.get_array_resfactor_applied(self.BIODIV_RAW_WEIGHTED_LDS)
 
 
+        ###############################################################
+        # No-go land use data.
+        ###############################################################
+
+        self.AG_NO_GO_DATA_YRJ = np.ones((100, self.NCELLS, self.N_AG_LUS))
+        self.NON_AG_NO_GO_DATA_YRK = np.ones((100, self.NCELLS, self.N_NON_AG_LUS))
+
+
         print("Data loading complete\n")
 
     def get_coord(self, index_ij: np.ndarray, trans):

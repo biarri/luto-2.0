@@ -1156,7 +1156,7 @@ def get_exclusions_beccs(data, lumap) -> np.ndarray:
     return exclude
 
 
-def get_exclude_matrices(data: Data, ag_x_mrj, lumap) -> np.ndarray:
+def get_exclude_matrices(data: Data, ag_x_mrj, lumap, target_year: int) -> np.ndarray:
     """
     Get the non-agricultural exclusions matrix.
 
@@ -1180,6 +1180,8 @@ def get_exclude_matrices(data: Data, ag_x_mrj, lumap) -> np.ndarray:
     """
     non_ag_x_matrices = {lu: np.zeros(data.NCELLS) for lu in NON_AG_LAND_USES}
 
+    non_ag_no_go_lu_rk = data.NON_AG_NO_GO_DATA_YRK[target_year, :, :]
+
     # Environmental plantings exclusions. Note: the order must be consistent with the NON_AG_LAND_USES order.
     if NON_AG_LAND_USES['Environmental Plantings']:
         non_ag_x_matrices['Environmental Plantings'] = get_exclusions_environmental_plantings(data, lumap)
@@ -1200,7 +1202,9 @@ def get_exclude_matrices(data: Data, ag_x_mrj, lumap) -> np.ndarray:
 
     # reshape each non-agricultural matrix to be indexed (r, k) and concatenate on the k indexing
     non_ag_x_matrices = [array.reshape((data.NCELLS, 1)) for array in non_ag_x_matrices.values()]
-    return np.concatenate(non_ag_x_matrices, axis=1).astype(np.float32)
+    non_ag_x_matrices = np.concatenate(non_ag_x_matrices, axis=1).astype(np.float32)
+
+    return (non_ag_x_matrices * non_ag_no_go_lu_rk).astype(np.float32)
 
 
 def get_lower_bound_non_agricultural_matrices(data: Data, base_year) -> np.ndarray:
